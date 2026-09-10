@@ -3,7 +3,7 @@
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 Console.WriteLine("CrossApp - практикум з крос-платформного програмування");
-Console.WriteLine("Студент: Миськів Вікторія, група ФЕІ-25");
+Console.WriteLine("Студент: Миськів Вікторія, група ФЕІ-37");
 Console.WriteLine(new string('-', 52));
 Console.WriteLine($"ОС (OSDescription): {RuntimeInformation.OSDescription}");
 Console.WriteLine($"ОС (Environment) : {Environment.OSVersion}");
