@@ -11,3 +11,7 @@ dotnet run --project src/Cli
 
 ## Середовище
 .NET SDK 10.0, Windows x64
+
+## Порівняння розмірів Self-Contained публікацій
+- **win-x64:** 153 МБ
+- **linux-x64:** 157 МБ
