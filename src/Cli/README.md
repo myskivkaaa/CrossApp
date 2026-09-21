@@ -32,6 +32,7 @@ CrossApp/
         └── Program.cs
 
 
+
 ## Порівняння режимів публікації (RID)
 
 | RID | Режим | Розмір publish | Потрібен runtime |
@@ -39,3 +40,6 @@ CrossApp/
 | `win-x64` | self-contained | ~76.85 МБ | ні |
 | `win-x64` | framework-dependent | ~0.19 МБ | так (.NET 10) |
 | `linux-x64` | self-contained | ~157 МБ | ні |
+
+
+## Зміни для здачі
