@@ -1,29 +1,33 @@
-﻿using System.Text.Json;
-using Core;
+﻿using Core.Dto;
+using Core.Import;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-EnvironmentReport report = EnvironmentInfo.Collect();
+// Отримуємо шлях до файлу з аргументів або використовуємо шлях за замовчуванням
+string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv");
 
-if (args.Contains("--json"))
+if (!File.Exists(path))
 {
-    string jsonString = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = false });
-    Console.WriteLine(jsonString);
+    Console.WriteLine($"Файл не знайдено: {Path.GetFullPath(path)}");
+    return 1;
 }
-else
+
+// Завантажуємо та парсимо дані через наш новий імпортер у Core
+ImportResult<ProductDto> result = ProductCsvImporter.Load(path);
+
+Console.WriteLine($"Завантажено записів: {result.Items.Count}");
+foreach (ProductDto p in result.Items.Take(5))
 {
-    Console.WriteLine("CrossApp - практикум з крос-платформного програмування");
-    Console.WriteLine($"Студент: {report.Student}, група {report.Group}");
-    Console.WriteLine(new string('-', 52));
-    Console.WriteLine($"ОС (OSDescription) : {report.OsDescription}");
-    Console.WriteLine($"ОС (Environment)   : {report.OsVersion}");
-    Console.WriteLine($"Архітектура процесу: {report.ProcessArchitecture}");
-    Console.WriteLine($"Версія .NET (CLR)  : {report.DotNetVersion}");
-    Console.WriteLine($"Runtime            : {report.Runtime}");
-    Console.WriteLine($"RID (визначено)    : {report.DetectedRid}");
-    Console.WriteLine($"RID (від .NET)     : {report.ReportedRid}");
-    Console.WriteLine($"Каталог застосунку : {report.AppDirectory}");
-    Console.WriteLine($"Поточний каталог   : {report.CurrentDirectory}");
-    Console.WriteLine(new string('-', 52));
-    Console.WriteLine($"Предметна область  : {report.Domain}");
+    Console.WriteLine($"  {p.Id,-6} {p.Sku,-10} {p.Name,-26} {p.Quantity,5} {p.Unit}");
 }
+
+if (result.Errors.Count > 0)
+{
+    Console.WriteLine($"Пропущено рядків: {result.Errors.Count}");
+    foreach (string e in result.Errors)
+    {
+        Console.WriteLine($"  ! {e}");
+    }
+}
+
+return 0;
