@@ -4,7 +4,6 @@ using Core.Import;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Отримуємо шлях до файлу з аргументів або використовуємо шлях за замовчуванням (.csv або .json)
 string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv");
 
 if (!File.Exists(path))
@@ -13,7 +12,8 @@ if (!File.Exists(path))
     return 1;
 }
 
-// Вибираємо імпортер залежно від розширення файлу за допомогою switch expression (Додаткове завдання 1)
+// Імпортер повертає загальний результат із сутностями IEntityItem
+// Вибираємо імпортер залежно від розширення файлу та приводимо результати до ProductDto
 ImportResult<ProductDto> result = Path.GetExtension(path).ToLowerInvariant() switch
 {
     ".csv" => ProductCsvImporter.Load(path),
@@ -24,9 +24,18 @@ ImportResult<ProductDto> result = Path.GetExtension(path).ToLowerInvariant() swi
 };
 
 Console.WriteLine($"Завантажено записів: {result.Items.Count}");
-foreach (ProductDto p in result.Items.Take(5))
+
+// Виводимо лише ті елементи, які є товарами (ProductDto), для красивого виводу в консоль
+foreach (var item in result.Items.OfType<ProductDto>().Take(5))
 {
-    Console.WriteLine($"  {p.Id,-6} {p.Sku,-10} {p.Name,-26} {p.Quantity,5} {p.Unit}");
+    Console.WriteLine($"  {item.Id,-6} {item.Sku,-10} {item.Name,-26} {item.Quantity,5} {item.Unit}");
+}
+
+// Якщо є склади (WarehouseDto), також можемо показати їхню кількість або приклади
+var warehouses = result.Items.OfType<WarehouseDto>().ToList();
+if (warehouses.Count > 0)
+{
+    Console.WriteLine($"Завантажено складів: {warehouses.Count}");
 }
 
 if (result.Errors.Count > 0)
@@ -38,7 +47,7 @@ if (result.Errors.Count > 0)
     }
 }
 
-// Виведення статистики імпорту одним рядком (Додаткове завдання 3)
+// Статистика імпорту (Додаткове завдання 3)
 int totalProcessed = result.Items.Count + result.Errors.Count;
 double errorPercentage = totalProcessed > 0 ? (double)result.Errors.Count / totalProcessed * 100 : 0;
 Console.WriteLine($"[Статистика імпорту] Усього: {totalProcessed} | Прийнято: {result.Items.Count} | Пропущено: {result.Errors.Count} | Помилки: {errorPercentage:F1}%");
