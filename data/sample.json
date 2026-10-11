@@ -5,5 +5,11 @@
     "name": "Тестовий товар з JSON",
     "unit": "шт",
     "quantity": 50
+  },
+  {
+    "id": "W-999",
+    "code": "WWWWWWWWWWWWWWWWWWWWWWW",
+    "location": "Львів, Городоцька",
+    "manager": "Петренко В. В."
   }
 ]
