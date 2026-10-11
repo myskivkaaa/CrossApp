@@ -2,6 +2,7 @@ using Core.Dto;
 
 namespace Core.Domain;
 
+// Перелічувач бізнес-статусів товару (для додаткового завдання 3)
 public enum ProductStatus
 {
     Draft,
@@ -11,6 +12,7 @@ public enum ProductStatus
 
 public sealed class Product
 {
+    // Приватні поля для інкапсуляції стану (ззовні напряму змінити не можна)
     private int _quantity;
     private ProductStatus _status = ProductStatus.Draft;
     
@@ -18,9 +20,10 @@ public sealed class Product
     public string Sku { get; }
     public string Name { get; }
     public string Unit { get; }
-    public int Quantity => _quantity;
+    public int Quantity => _quantity; // Тільки для читання
     public ProductStatus Status => _status;
 
+    // Приватний конструктор: забороняє створення об'єкта через "new Product()" в обхід правил
     private Product(string id, string sku, string name, string unit, int quantity)
     {
         Id = id;
@@ -30,7 +33,7 @@ public sealed class Product
         _quantity = quantity;
     }
 
-    // Фабричний метод для перевірки інваріантів при створенні
+    // Фабричний метод Create: перевіряє ВСІ інваріанти ДО створення об'єкта
     public static Product Create(string id, string sku, string name, string unit, int quantity)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -45,6 +48,7 @@ public sealed class Product
         return new Product(id.Trim(), sku.Trim().ToUpperInvariant(), name.Trim(), unit.Trim(), quantity);
     }
 
+    // Метод зміни стану: оформлення приходу (перевіряє, чи кількість > 0)
     public void RegisterArrival(int amount)
     {
         if (amount <= 0)
@@ -53,6 +57,7 @@ public sealed class Product
         _quantity += amount;
     }
 
+    // Метод зміни стану: видача товару (перевіряє чи достатньо залишку)
     public void Issue(int amount)
     {
         if (amount <= 0)
@@ -63,7 +68,7 @@ public sealed class Product
         _quantity -= amount;
     }
 
-    // Додаткове завдання 3: Зміна статусу через switch expression (перевірка допустимих переходів)
+    // Додаткове завдання 3: Перевірка дозволених переходів статусів через switch expression
     public void ChangeStatus(ProductStatus newStatus)
     {
         _status = (_status, newStatus) switch
@@ -75,7 +80,7 @@ public sealed class Product
         };
     }
 
-    // Мапінг у DTO тижня 3 та назад
+    // Мапінг сутності у DTO та назад (для зв'язку зі сховищами)
     public ProductDto ToDto() => new(Id, Sku, Name, Unit, Quantity);
     
     public static Product FromDto(ProductDto dto) =>

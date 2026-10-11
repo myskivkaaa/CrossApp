@@ -3,6 +3,7 @@ using Core.Import;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+// Сценарій 1: Успішна робота з доменною моделлю (створення, прихід, видача)
 Console.WriteLine("=== Сценарій 1: успіх ===");
 Product product = Product.Create("P-001", "sku-001", "Цемент М400 25кг", "шт", 100);
 Console.WriteLine(product);
@@ -10,6 +11,7 @@ product.RegisterArrival(50);
 product.Issue(30);
 Console.WriteLine(product);
 
+// Демонстрація додаткового завдання 3 (Статуси та switch)
 Console.WriteLine();
 Console.WriteLine("=== Додаткове завдання 3: Перевірка переходів статусів (switch expression) ===");
 Console.WriteLine($"Початковий статус: {product.Status}");
@@ -17,12 +19,14 @@ product.ChangeStatus(ProductStatus.Active);
 Console.WriteLine($"Новий статус після активації: {product.Status}");
 TryDo("Недопустимий перехід статусу (з Active назад у Draft)", () => product.ChangeStatus(ProductStatus.Draft));
 
+// Сценарій 2: Демонстрація порушення інваріантів (перехоплення винятків через try/catch)
 Console.WriteLine();
 Console.WriteLine("=== Сценарій 2: порушення інваріантів ===");
 TryDo("видача більша за залишок", () => product.Issue(1000));
 TryDo("порожній SKU", () => Product.Create("P-002", "", "Пісок", "т", 10));
 TryDo("від'ємний залишок", () => Product.Create("P-003", "SKU-003", "Цегла", "шт", -5));
 
+// Демонстрація додаткового завдання 1 (Зв'язок імпорту з доменом)
 Console.WriteLine();
 Console.WriteLine("=== Додаткове завдання 1: Зв'язок імпорту з тижнем 3 та доменними інваріантами ===");
 string filePath = Path.Combine("data", "sample.csv");
@@ -43,6 +47,7 @@ else
     Console.WriteLine("Файл sample.csv не знайдено.");
 }
 
+// Допоміжний метод для безпечного виконання і перехоплення винятків (щоб програма не падала)
 static void TryDo(string title, Action action)
 {
     try
