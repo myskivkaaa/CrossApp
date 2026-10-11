@@ -2,15 +2,24 @@ using Core.Dto;
 
 namespace Core.Domain;
 
+public enum ProductStatus
+{
+    Draft,
+    Active,
+    Discontinued
+}
+
 public sealed class Product
 {
     private int _quantity;
+    private ProductStatus _status = ProductStatus.Draft;
     
     public string Id { get; }
     public string Sku { get; }
     public string Name { get; }
     public string Unit { get; }
     public int Quantity => _quantity;
+    public ProductStatus Status => _status;
 
     private Product(string id, string sku, string name, string unit, int quantity)
     {
@@ -52,6 +61,18 @@ public sealed class Product
             throw new InvalidOperationException($"Не можна видати {amount}: залишок {Sku} = {_quantity}");
         
         _quantity -= amount;
+    }
+
+    // Додаткове завдання 3: Зміна статусу через switch expression (перевірка допустимих переходів)
+    public void ChangeStatus(ProductStatus newStatus)
+    {
+        _status = (_status, newStatus) switch
+        {
+            (ProductStatus.Draft, ProductStatus.Active) => ProductStatus.Active,
+            (ProductStatus.Active, ProductStatus.Discontinued) => ProductStatus.Discontinued,
+            (ProductStatus.Draft, ProductStatus.Discontinued) => ProductStatus.Discontinued,
+            _ => throw new InvalidOperationException($"Недопустимий перехід статусу з {_status} у {newStatus}")
+        };
     }
 
     // Мапінг у DTO тижня 3 та назад
