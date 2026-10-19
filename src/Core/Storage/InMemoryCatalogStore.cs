@@ -1,4 +1,4 @@
-/*using Core.Abstractions;
+using Core.Abstractions;
 using Core.Domain;
 
 namespace Core.Storage;
@@ -29,5 +29,10 @@ public sealed class InMemoryCatalogStore(IEnumerable<Product>? seed = null) : IC
     }
 
     public bool Remove(string id) => _items.Remove(id); // Видаляю запис із словника та повертаю результат
+
+    public IReadOnlyList<Product> FindBy(Func<Product, bool> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        return _items.Values.Where(predicate).ToList();
+    }
 }
-*/

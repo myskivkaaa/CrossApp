@@ -1,4 +1,3 @@
-/*using Core.Domain;
 namespace Core;
 
 public static class SampleData
@@ -10,4 +9,3 @@ public static class SampleData
         Domain.Product.Create("P-003", "SKU-003", "Цегла рядова", "шт", 500)
     ];
 }
-*/

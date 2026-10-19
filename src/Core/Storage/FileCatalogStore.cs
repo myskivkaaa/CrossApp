@@ -1,4 +1,4 @@
-/*using System.Text.Json;
+using System.Text.Json;
 using Core.Abstractions;
 using Core.Domain;
 using Core.Dto;
@@ -86,5 +86,11 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
         Flush(); // Зберігаю зміни на диск після видалення
         return true;
     }
+
+    public IReadOnlyList<Product> FindBy(Func<Product, bool> predicate)
+    {
+    ArgumentNullException.ThrowIfNull(predicate);
+    EnsureLoaded();
+    return _cache.Values.Where(predicate).ToList();
+    }
 }
-*/

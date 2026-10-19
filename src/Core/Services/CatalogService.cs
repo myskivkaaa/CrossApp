@@ -1,4 +1,4 @@
-/*using Core.Abstractions;
+using Core.Abstractions;
 using Core.Domain;
 
 namespace Core.Services;
@@ -29,5 +29,11 @@ public sealed class CatalogService(ICatalogStore store)
     public IReadOnlyList<Product> All() => _store.List(); // Отримую загальний список через сховище
 
     public Product? Find(string id) => _store.GetById(id);  // Шукаю товар за ID
+
+    // Метод пошуку за предикатом через сервіс
+    public IReadOnlyList<Product> FindBy(Func<Product, bool> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        return _store.FindBy(predicate);
+    }
 }
-*/

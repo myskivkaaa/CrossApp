@@ -2,7 +2,7 @@ using Core.Dto;
 
 namespace Core.Domain;
 
-// Перелічувач бізнес-статусів товару (для додаткового завдання 3)
+// Перелічувач бізнес-статусів товару (для додаткового завдання)
 public enum ProductStatus
 {
     Draft,
@@ -68,7 +68,7 @@ public sealed class Product
         _quantity -= amount;
     }
 
-    // Додаткове завдання 3: Перевірка дозволених переходів статусів через switch expression
+    // Перевірка дозволених переходів статусів через switch expression
     public void ChangeStatus(ProductStatus newStatus)
     {
         _status = (_status, newStatus) switch

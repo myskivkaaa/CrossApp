@@ -1,62 +1,106 @@
-﻿using Core.Domain;
-using Core.Import;
+﻿using Core;
+using Core.Abstractions;
+using Core.Domain;
+using Core.Services;
+using Core.Storage;
 
+// Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Сценарій 1: Успішна робота з доменною моделлю (створення, прихід, видача)
-Console.WriteLine("=== Сценарій 1: успіх ===");
-Product product = Product.Create("P-001", "sku-001", "Цемент М400 25кг", "шт", 100);
-Console.WriteLine(product);
-product.RegisterArrival(50);
-product.Issue(30);
-Console.WriteLine(product);
+// Крок 5: Визначаємо режим роботи за допомогою аргументу командного рядка --file та --cache
+bool useFile = args.Contains("--file");
+bool useCache = args.Contains("--cache");
+string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
 
-// Демонстрація додаткового завдання 3 (Статуси та switch)
-Console.WriteLine();
-Console.WriteLine("=== Додаткове завдання 3: Перевірка переходів статусів (switch expression) ===");
-Console.WriteLine($"Початковий статус: {product.Status}");
-product.ChangeStatus(ProductStatus.Active);
-Console.WriteLine($"Новий статус після активації: {product.Status}");
-TryDo("Недопустимий перехід статусу (з Active назад у Draft)", () => product.ChangeStatus(ProductStatus.Draft));
+// Composition Root: єдине місце в додатку, де обирається конкретна реалізація сховища
+ICatalogStore store = useFile
+    ? (useCache ? new CachingCatalogStore(new FileCatalogStore(dataPath)) : new FileCatalogStore(dataPath))
+    : new InMemoryCatalogStore(SampleData.Products());
 
-// Сценарій 2: Демонстрація порушення інваріантів (перехоплення винятків через try/catch)
-Console.WriteLine();
-Console.WriteLine("=== Сценарій 2: порушення інваріантів ===");
-TryDo("видача більша за залишок", () => product.Issue(1000));
-TryDo("порожній SKU", () => Product.Create("P-002", "", "Пісок", "т", 10));
-TryDo("від'ємний залишок", () => Product.Create("P-003", "SKU-003", "Цегла", "шт", -5));
+// Впроваджуємо сховище в бізнес-сервіс через конструктор (Dependency Injection)
+var service = new CatalogService(store);
 
-// Демонстрація додаткового завдання 1 (Зв'язок імпорту з доменом)
-Console.WriteLine();
-Console.WriteLine("=== Додаткове завдання 1: Зв'язок імпорту з тижнем 3 та доменними інваріантами ===");
-string filePath = Path.Combine("data", "sample.csv");
-if (File.Exists(filePath))
+Console.WriteLine("==================================================");
+Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
+Console.WriteLine("==================================================\n");
+
+// Крок 6: Основний сценарій роботи через сервіс (успіх)
+Console.WriteLine("ОСНОВНИЙ ХІД РОБОТИ: Операції через сервіс");
+try
 {
-    var csvResult = ProductCsvImporter.Load(filePath);
-    var (validProducts, domainErrors) = DomainImporter.ProcessImport(csvResult);
+    var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 50);
+    Console.WriteLine($"Створено товар: {created}");
 
-    Console.WriteLine($"Успішно створено доменних об'єктів: {validProducts.Count}");
-    Console.WriteLine($"Відсіяно через помилки: {domainErrors.Count}");
-    foreach (var err in domainErrors)
-    {
-        Console.WriteLine($"  ! {err}");
-    }
+    service.Receive(created.Id, 25);
+    Console.WriteLine($"Після приходу: {service.Find(created.Id)}");
 }
-else
+catch (Exception ex)
 {
-    Console.WriteLine("Файл sample.csv не знайдено.");
+    Console.WriteLine($"Помилка: {ex.Message}");
 }
+Console.WriteLine();
 
-// Допоміжний метод для безпечного виконання і перехоплення винятків (щоб програма не падала)
+// Крок 6: Сценарій відмови (порушення інваріантів через try/catch)
+Console.WriteLine("ОСНОВНИЙ ХІД РОБОТИ: Сценарій відмови");
+TryDo("отримання приходу для неіснуючого ID", () => service.Receive("non-existent-id", 10));
+TryDo("додавання товару з порожнім SKU", () => service.Add("", "Пісок", "т", 10));
+TryDo("додавання товару з від'ємним залишком", () => service.Add("SKU-003", "Цегла", "шт", -5));
+Console.WriteLine();
+
+// Виведення поточного стану сховища через сервіс
+Console.WriteLine("==================================================");
+Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
+Console.WriteLine("==================================================");
+foreach (var p in service.All())
+{
+    Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
+}
+Console.WriteLine("==================================================\n");
+
+// ДОДАТКОВІ ЗАВДАННЯ
+Console.WriteLine("==================================================");
+Console.WriteLine("ДОДАТКОВІ ЗАВДАННЯ:");
+Console.WriteLine("==================================================");
+
+// Додаткове завдання 1: Демонстрація кешуючого декоратора CachingCatalogStore
+Console.WriteLine("Додаткове 1: Декоратор CachingCatalogStore");
+Console.WriteLine($"Використовується обгортка кешування поверх сховища: {store.GetType().Name}");
+Console.WriteLine();
+
+// Додаткове завдання 2: Пошук з параметром Func (предикат)
+Console.WriteLine("Додаткове 2: Пошук за предикатом (фільтрація залишку > 40)");
+var filteredProducts = service.FindBy(p => p.Quantity > 40);
+Console.WriteLine($"Знайдено товарів з кількістю > 40: {filteredProducts.Count}");
+foreach (var p in filteredProducts)
+{
+    Console.WriteLine($"-> {p.Name} (Кількість: {p.Quantity} {p.Unit})");
+}
+Console.WriteLine();
+
+// Додаткове завдання 3: Фабрика створення сховищ StoreFactory
+Console.WriteLine("Додаткове 3: Фабрика StoreFactory");
+var factoryStore = StoreFactoryCreateDemo(args);
+Console.WriteLine($"Фабрика успішно створила сховище типу: {factoryStore.GetType().Name}");
+Console.WriteLine("==================================================");
+
+// Допоміжний метод для безпечного виконання операцій і перехоплення винятків
 static void TryDo(string title, Action action)
 {
     try
     {
         action();
-        Console.WriteLine($"  {title}: виняток НЕ спрацював, інваріант відсутній!");
+        Console.WriteLine($"{title}: виняток не спрацював!");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"  {title}: {ex.GetType().Name} - {ex.Message}");
+        Console.WriteLine($"{title} -> {ex.GetType().Name}: {ex.Message}");
     }
+}
+
+// Імітація методів для демонстрації додаткових завдань
+static ICatalogStore StoreFactoryCreateDemo(string[] arguments)
+{
+    bool fileMode = arguments.Contains("--file");
+    string path = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
+    return fileMode ? new FileCatalogStore(path) : new InMemoryCatalogStore(SampleData.Products());
 }
