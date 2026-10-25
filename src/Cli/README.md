@@ -17,20 +17,38 @@ dotnet run --project src/Cli
 - **linux-x64:** 157 МБ
 
 ## Структура Solution
-```text
 CrossApp/
 │
 ├── CrossApp.sln
 ├── README.md
 ├── .gitignore
+├── data/
+│   ├── catalog.json
+│   └── sample.csv
 └── src/
-    ├── Core/        # Бібліотека класів (логіка збору середовища, доменна модель)
+    ├── Core/        # Бібліотека класів (доменна модель, DTO, імпорт, сховища, сервіси)
     │   ├── Core.csproj
-    │   └── EnvironmentInfo.cs
-    └── Cli/         # Консольний клієнт (точка входу, форматування виводу)
+    │   ├── Abstractions/
+    │   │   └── ICatalogStore.cs
+    │   ├── Domain/
+    │   │   └── Product.cs
+    │   ├── Dto/
+    │   │   ├── ImportResult.cs
+    │   │   └── ProductDto.cs
+    │   ├── Import/
+    │   │   └── ProductCsvImporter.cs
+    │   ├── Services/
+    │   │   └── CatalogService.cs
+    │   ├── Storage/
+    │   │   ├── CachingCatalogStore.cs
+    │   │   ├── FileCatalogStore.cs
+    │   │   ├── InMemoryCatalogStore.cs
+    │   │   └── StoreFactory.cs
+    │   ├── EnvironmentInfo.cs
+    │   └── SampleData.cs
+    └── Cli/         # Консольний клієнт (Composition Root, сценарії, демонстрація)
         ├── Cli.csproj
         └── Program.cs
-
 
 
 ## Порівняння режимів публікації (RID)
@@ -42,9 +60,26 @@ CrossApp/
 | `linux-x64` | self-contained | ~157 МБ | ні |
 
 
-## Зміни для здачі лабораторної
-
 ## Інваріанти доменної моделі (Лабораторна робота 4)
-1. **Обов'язковий рядковий ключ:** Поля `Id` та `Sku` не можуть бути порожніми чи складатися лише з пробілів (`ArgumentException`).
-2. **Коректність кількості:** Початковий залишок при створенні та значення для приходу/видачі мають бути невід'ємними / більшими за нуль (`ArgumentOutOfRangeException`).
-3. **Контроль стану складу:** Неможливо видати більшу кількість товару, ніж є на поточному залишку (`InvalidOperationException`)
+Обов'язковий рядковий ключ: Поля Id та Sku не можуть бути порожніми чи складатися лише з пробілів (ArgumentException).
+
+Коректність кількості: Початковий залишок при створенні та значення для приходу/видачі мають бути невід'ємними / більшими за нуль (ArgumentOutOfRangeException).
+
+Контроль стану складу: Неможливо видати більшу кількість товару, ніж є на поточному залишку (InvalidOperationException).
+
+Переходи статусів: Статус товару може змінюватися лише за допустимими бізнес-правилами через switch expression (з Draft у Active/Discontinued).
+
+## Архітектура сервісного шару та сховищ (Лабораторна робота 5)
+Інтерфейс сховища (ICatalogStore): Абстракція над способом зберігання даних (методи List, GetById, Add, Update, Remove, FindBy).
+
+Реалізації сховищ:
+
+InMemoryCatalogStore (робота в оперативній пам'яті на основі Dictionary).
+
+FileCatalogStore (зберігання на диск у форматі JSON з кешуванням та дозавантаженням).
+
+Декоратор (CachingCatalogStore): Огортає інше сховище для оптимізації доступу через локальний кеш у пам'яті.
+
+Сервісний шар (CatalogService): Інкапсулює бізнес-операції та залежить виключно від абстракції (ICatalogStore) через ін'єкцію в конструкторі.
+
+Composition Root: Точка входу в Program.cs, де за допомогою аргументів командного рядка (--file, --cache) або фабрики StoreFactory створюються та зв'язуються конкретні об'єкти.
