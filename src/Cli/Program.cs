@@ -1,6 +1,7 @@
 ﻿using Core;
 using Core.Abstractions;
 using Core.Domain;
+using Core.Events; // НОВЕ: підключаємо простір імен для подій
 using Core.Services;
 using Core.Storage;
 
@@ -28,7 +29,7 @@ Console.WriteLine("==================================================\n");
 Console.WriteLine("ОСНОВНИЙ ХІД РОБОТИ: Операції через сервіс");
 try
 {
-    var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 50);
+    var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 10);
     Console.WriteLine($"Створено товар: {created}");
 
     service.Receive(created.Id, 25);
@@ -81,6 +82,97 @@ Console.WriteLine();
 Console.WriteLine("Додаткове 3: Фабрика StoreFactory");
 var factoryStore = StoreFactoryCreateDemo(args);
 Console.WriteLine($"Фабрика успішно створила сховище типу: {factoryStore.GetType().Name}");
+Console.WriteLine("==================================================\n");
+
+
+// ==========================================================
+// ЛАБОРАТОРНА РОБОТА №6: Доменні події, делегати Action/Func, лямбди
+// ==========================================================
+Console.WriteLine("==================================================");
+Console.WriteLine("ЛАБОРАТОРНА РОБОТА №6: Доменні події та підписки");
+Console.WriteLine("==================================================");
+
+// Налаштування лог-файлу для першого підписника
+var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "app.log");
+Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+
+// 1. Перший підписник (локальний метод) — виводить у консоль та дописує у файл
+void OnCatalogChanged(object? sender, CatalogChangedEventArgs e)
+{
+    var line = $"{e.At:HH:mm:ss} {e.Kind,-8} {e.Id} {e.Delta,4:+0;-0} залишок {e.QuantityAfter}";
+    Console.WriteLine(line);
+    File.AppendAllText(logPath, line + Environment.NewLine);
+}
+
+service.Changed += OnCatalogChanged;
+
+// 2. Другий підписник (лямбда-вираз із замиканням над лічильником)
+int changes = 0;
+service.Changed += (_, _) => changes++;
+
+// Сценарій подій: додавання та зміна
+var labCreated = service.Add("SKU-L6", "Мережевий фільтр", "шт", 20);
+service.Receive(labCreated.Id, 15);
+
+Console.WriteLine($"\n[Події] Отримано подій (лічильник лямбди): {changes}");
+
+// Перевірка відписки від першого обробника
+service.Changed -= OnCatalogChanged;
+Console.WriteLine("[Події] Відписали консоль/файл від події. Робимо Receive(5)...");
+
+service.Receive(labCreated.Id, 5); // Ця операція оновтить стан, але запису в консоль/файл уже не буде
+Console.WriteLine($"[Події] Отримано подій після відписки (лічильник лямбди): {changes}");
+
+// Сценарій відмови (порушення інваріанту або неіснуючий ID) — перевіряємо, що подія не створюється
+Console.WriteLine("\n[Події] Сценарій відмови (виняток під час Receive):");
+try
+{
+    service.Receive("invalid-id-999", 10);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Зловлено очікуваний виняток: {ex.Message}");
+    Console.WriteLine($"Лічильник подій залишився незмінним: {changes}");
+}
+
+// Використання Func через FindAll
+Console.WriteLine("\n[Події] Демонстрація методу FindAll з делегатом Func:");
+var lowStock = service.FindAll(p => p.Quantity < 100);
+Console.WriteLine($"Знайдено товарів з кількістю < 100: {lowStock.Count}");
+Console.WriteLine("==================================================\n");
+
+// ==========================================================
+// ДОДАТКОВІ ЗАВДАННЯ (ЛАБОРАТОРНА РОБОТА №6)
+// ==========================================================
+Console.WriteLine("\n==================================================");
+Console.WriteLine("ДОДАТКОВІ ЗАВДАННЯ (Лабораторна №6):");
+Console.WriteLine("==================================================");
+
+// Додаткове завдання 1: INotificationSink (ConsoleSink та FileSink через конструктор сервісу)
+Console.WriteLine("--- Додаткове 1: Патерн Sink замість подій ---");
+var extraLogPath = Path.Combine(AppContext.BaseDirectory, "logs", "sink.log");
+Core.Notifications.INotificationSink sink = args.Contains("--file-sink") 
+    ? new Core.Notifications.FileSink(extraLogPath) 
+    : new Core.Notifications.ConsoleSink();
+
+sink.Notify("[Sink] Це сповіщення надіслано через реалізацію INotificationSink.");
+
+// Додаткове завдання 2: Action<string> як параметр методу імпорту
+Console.WriteLine("\n--- Додаткове 2: Імпорт товарів з Action<string> (звіт про пропущені) ---");
+var rawData = new[]
+{
+    ("SKU-X1", "Комутатор 8-портовий", "шт", 10),
+    ("", "Брак без SKU", "шт", 5),               // Має викликати виняток інваріанту
+    ("SKU-X3", "Патч-корд 2м", "шт", -2),          // Від'ємний залишок — виняток
+    ("SKU-X4", "Коннектори RJ-45", "пачка", 100)
+};
+
+int imported = service.ImportProducts(rawData, skippedMessage =>
+{
+    Console.WriteLine($"[Імпорт звіту]: {skippedMessage}");
+});
+
+Console.WriteLine($"Успішно імпортовано товарів: {imported}");
 Console.WriteLine("==================================================");
 
 // Допоміжний метод для безпечного виконання операцій і перехоплення винятків
