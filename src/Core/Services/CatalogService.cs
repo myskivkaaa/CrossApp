@@ -4,7 +4,7 @@ using Core.Events; //  підключаємо простір імен для п�
 
 namespace Core.Services;
 
-public sealed class CatalogService(ICatalogStore store) //DI передаємо ззовні сховище а не сервіс створює його
+public sealed class CatalogService(ICatalogStore store) // DI передаємо ззовні сховище а не сервіс створює його
 {
     // Зберігаю посилання на інтерфейс сховища через ін'єкцію в конструкторі
     private readonly ICatalogStore _store = store ?? throw new ArgumentNullException(nameof(store));

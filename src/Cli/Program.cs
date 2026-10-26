@@ -8,7 +8,7 @@ using Core.Storage;
 // Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Крок 5: Визначаємо режим роботи за допомогою аргументу командного рядка --file та --cache
+// Визначаємо режим роботи за допомогою аргументу командного рядка --file та --cache
 bool useFile = args.Contains("--file");
 bool useCache = args.Contains("--cache");
 string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
@@ -24,66 +24,6 @@ var service = new CatalogService(store);
 Console.WriteLine("==================================================");
 Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
 Console.WriteLine("==================================================\n");
-
-// Крок 6: Основний сценарій роботи через сервіс (успіх)
-Console.WriteLine("ОСНОВНИЙ ХІД РОБОТИ: Операції через сервіс");
-try
-{
-    var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 10);
-    Console.WriteLine($"Створено товар: {created}");
-
-    service.Receive(created.Id, 25);
-    Console.WriteLine($"Після приходу: {service.Find(created.Id)}");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Помилка: {ex.Message}");
-}
-Console.WriteLine();
-
-// Крок 6: Сценарій відмови (порушення інваріантів через try/catch)
-Console.WriteLine("ОСНОВНИЙ ХІД РОБОТИ: Сценарій відмови");
-TryDo("отримання приходу для неіснуючого ID", () => service.Receive("non-existent-id", 10));
-TryDo("додавання товару з порожнім SKU", () => service.Add("", "Пісок", "т", 10));
-TryDo("додавання товару з від'ємним залишком", () => service.Add("SKU-003", "Цегла", "шт", -5));
-Console.WriteLine();
-
-// Виведення поточного стану сховища через сервіс
-Console.WriteLine("==================================================");
-Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
-Console.WriteLine("==================================================");
-foreach (var p in service.All())
-{
-    Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
-}
-Console.WriteLine("==================================================\n");
-
-// ДОДАТКОВІ ЗАВДАННЯ
-Console.WriteLine("==================================================");
-Console.WriteLine("ДОДАТКОВІ ЗАВДАННЯ:");
-Console.WriteLine("==================================================");
-
-// Додаткове завдання 1: Демонстрація кешуючого декоратора CachingCatalogStore
-Console.WriteLine("Додаткове 1: Декоратор CachingCatalogStore");
-Console.WriteLine($"Використовується обгортка кешування поверх сховища: {store.GetType().Name}");
-Console.WriteLine();
-
-// Додаткове завдання 2: Пошук з параметром Func (предикат)
-Console.WriteLine("Додаткове 2: Пошук за предикатом (фільтрація залишку > 40)");
-var filteredProducts = service.FindBy(p => p.Quantity > 40);
-Console.WriteLine($"Знайдено товарів з кількістю > 40: {filteredProducts.Count}");
-foreach (var p in filteredProducts)
-{
-    Console.WriteLine($"-> {p.Name} (Кількість: {p.Quantity} {p.Unit})");
-}
-Console.WriteLine();
-
-// Додаткове завдання 3: Фабрика створення сховищ StoreFactory
-Console.WriteLine("Додаткове 3: Фабрика StoreFactory");
-var factoryStore = StoreFactoryCreateDemo(args);
-Console.WriteLine($"Фабрика успішно створила сховище типу: {factoryStore.GetType().Name}");
-Console.WriteLine("==================================================\n");
-
 
 // ==========================================================
 // ЛАБОРАТОРНА РОБОТА №6: Доменні події, делегати Action/Func, лямбди
@@ -110,20 +50,20 @@ service.Changed += OnCatalogChanged;
 int changes = 0;
 service.Changed += (_, _) => changes++;
 
-// Сценарій подій: додавання та зміна
-var labCreated = service.Add("SKU-L6", "Мережевий фільтр", "шт", 20);
-service.Receive(labCreated.Id, 15);
+// Основний хід роботи (Крок 1-5 методички): додавання та зміна стану з подіями
+var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 50);
+service.Receive(created.Id, 25);
 
 Console.WriteLine($"\n[Події] Отримано подій (лічильник лямбди): {changes}");
 
-// Перевірка відписки від першого обробника
+// Перевірка відписки від першого обробника (Крок 5)
 service.Changed -= OnCatalogChanged;
 Console.WriteLine("[Події] Відписали консоль/файл від події. Робимо Receive(5)...");
 
-service.Receive(labCreated.Id, 5); // Ця операція оновтить стан, але запису в консоль/файл уже не буде
+service.Receive(created.Id, 5); // Ця операція оновтить стан, але запису в консоль/файл уже не буде
 Console.WriteLine($"[Події] Отримано подій після відписки (лічильник лямбди): {changes}");
 
-// Сценарій відмови (порушення інваріанту або неіснуючий ID) — перевіряємо, що подія не створюється
+// Сценарій відмови (Крок 6): перевіряємо, що при винятку подія не створюється
 Console.WriteLine("\n[Події] Сценарій відмови (виняток під час Receive):");
 try
 {
@@ -135,7 +75,7 @@ catch (Exception ex)
     Console.WriteLine($"Лічильник подій залишився незмінним: {changes}");
 }
 
-// Використання Func через FindAll
+// Використання Func через FindAll (Крок 7)
 Console.WriteLine("\n[Події] Демонстрація методу FindAll з делегатом Func:");
 var lowStock = service.FindAll(p => p.Quantity < 100);
 Console.WriteLine($"Знайдено товарів з кількістю < 100: {lowStock.Count}");
@@ -144,7 +84,7 @@ Console.WriteLine("==================================================\n");
 // ==========================================================
 // ДОДАТКОВІ ЗАВДАННЯ (ЛАБОРАТОРНА РОБОТА №6)
 // ==========================================================
-Console.WriteLine("\n==================================================");
+Console.WriteLine("==================================================");
 Console.WriteLine("ДОДАТКОВІ ЗАВДАННЯ (Лабораторна №6):");
 Console.WriteLine("==================================================");
 
@@ -173,6 +113,27 @@ int imported = service.ImportProducts(rawData, skippedMessage =>
 });
 
 Console.WriteLine($"Успішно імпортовано товарів: {imported}");
+Console.WriteLine("==================================================");
+
+// ==========================================================
+// ВИВЕДЕННЯ ПАТОЧНОГО СПИСКУ ТОВАРІВ У СХОВИЩІ
+// ==========================================================
+Console.WriteLine("==================================================");
+Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
+Console.WriteLine("==================================================");
+foreach (var p in service.All())
+{
+    Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
+}
+Console.WriteLine("==================================================\n");
+
+// ==========================================================
+// ДЕМОНСТРАЦІЯ ЗБЕРЕЖЕНИХ МЕТОДІВ (Щоб уникнути попереджень CS8321)
+// ==========================================================
+Console.WriteLine("ПЕРЕВІРКА ДОПОМІЖНИХ МЕТОДІВ З ПОПЕРЕДНІХ ЛАБ:");
+TryDo("Демонстрація TryDo", () => { throw new InvalidOperationException("Тестовий виняток"); });
+var testFactoryStore = StoreFactoryCreateDemo(args);
+Console.WriteLine($"Фабрика успішно перевірена, тип сховища: {testFactoryStore.GetType().Name}");
 Console.WriteLine("==================================================");
 
 // Допоміжний метод для безпечного виконання операцій і перехоплення винятків

@@ -88,16 +88,16 @@ Composition Root: Точка входу в Program.cs, де за допомог�
 
 ### Реалізований функціонал:
 1. **Доменні події у `Core`**: 
-   - Створено `enum CatalogChangeKind` (`Added`, `Received`, `Issued`, `Removed`)[cite: 3].
-   - Створено клас даних події `CatalogChangedEventArgs` (успадкований від `EventArgs`)[cite: 3].
-   - Додано подію `event EventHandler<CatalogChangedEventArgs>? Changed` у `CatalogService` та приватний метод підняття `OnChanged` після успішних операцій[cite: 3, 4].
+   - Створено `enum CatalogChangeKind` (`Added`, `Received`, `Issued`, `Removed`)
+   - Створено клас даних події `CatalogChangedEventArgs` (успадкований від `EventArgs`)
+   - Додано подію `event EventHandler<CatalogChangedEventArgs>? Changed` у `CatalogService` та приватний метод підняття `OnChanged` після успішних операцій
 2. **Підписки в `Cli`**:
-   - Підписано локальний метод `OnCatalogChanged`, який виводить події в консоль та записує їх у файл `logs/app.log`[cite: 5].
-   - Додано другого підписника у вигляді лямбда-виразу із замиканням над лічильником `changes`[cite: 5].
-   - Продемонстровано відписку (`-=`) та сценарій відмови (коли виняток зупиняє підняття події)[cite: 5].
+   - Підписано локальний метод `OnCatalogChanged`, який виводить події в консоль та записує їх у файл `logs/app.log`
+   - Додано другого підписника у вигляді лямбда-виразу із замиканням над лічильником `changes`
+   - Продемонстровано відписку (`-=`) та сценарій відмови (коли виняток зупиняє підняття події)
 3. **Використання `Func`**:
-   - Реалізовано метод `FindAll` (і `FindBy`) із сигнатурою `Func<Product, bool>` для гнучкої фільтрації даних[cite: 4, 5].
+   - Реалізовано метод `FindAll` (і `FindBy`) із сигнатурою `Func<Product, bool>` для гнучкої фільтрації даних
 4. **Додаткові завдання**:
    - Реалізовано інтерфейс `INotificationSink` з альтернативними реалізаціями `ConsoleSink` та `FileSink`.
-   - Додано метод імпорту `ImportProducts` із параметром `Action<string> reportSkipped` для обробки помилок імпорту.
+   - Додано метод імпорту `ImportProducts` із параметром `Action<string> reportSkipped` для обробки помилок імпорту..
 
