@@ -147,3 +147,4 @@ static void RunPerformanceTest()
     sw.Stop();
     Console.WriteLine($"З проміжним ToList:    {sw.ElapsedMilliseconds} мс (знайдено: {count2})");
 }
+
