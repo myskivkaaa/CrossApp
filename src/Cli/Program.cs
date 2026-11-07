@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Core;
 using Core.Abstractions;
 using Core.Domain;
@@ -13,6 +15,11 @@ using Core.Reports;
 
 // Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+// НОВЕ (Лаба 8): Налаштування кооперативного скасування через Ctrl+C
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+// cts.CancelAfter(TimeSpan.FromSeconds(2)); // опційно для демонстрації таймауту
 
 // Визначаємо режим роботи за допомогою аргументів командного рядка --file та --cache
 bool useFile = args.Contains("--file");
@@ -79,6 +86,27 @@ switch (command)
     default:
         Console.WriteLine("==================================================");
         Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
+        Console.WriteLine("==================================================");
+        
+        // НОВЕ (Лаба 8): Приклад виклику асинхронного імпорту з обробкою винятків і скасування
+        try
+        {
+            var added = await service.ImportAsync(new JsonCatalogImporter(), dataPath, cts.Token);
+            Console.WriteLine($"Імпортовано записів: {added}");
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("Імпорт скасовано.");
+        }
+        catch (DomainException ex)
+        {
+            Console.WriteLine($"Дані відхилено: {ex.Message}");
+        }
+        catch (FileNotFoundException)
+        {
+            Console.WriteLine($"Файл не знайдено: {dataPath}");
+        }
+
         Console.WriteLine("==================================================");
         Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
         Console.WriteLine("==================================================");
@@ -147,4 +175,3 @@ static void RunPerformanceTest()
     sw.Stop();
     Console.WriteLine($"З проміжним ToList:    {sw.ElapsedMilliseconds} мс (знайдено: {count2})");
 }
-

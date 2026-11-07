@@ -3,6 +3,7 @@ using Xunit;
 using Core.Services;
 using Core.Storage;
 using Core.Abstractions;
+using Core.Events; // Тут живуть події та типи змін
 
 public class CatalogServiceTests
 {
@@ -13,7 +14,7 @@ public class CatalogServiceTests
         var service = new CatalogService(store);
         var p = service.Add("SKU-1", "Кабель", "м", 10);
 
-        Assert.Throws<ArgumentException>(() => service.Receive(p.Id, -5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.Receive(p.Id, -5));
         Assert.Equal(10, store.GetById(p.Id)!.Quantity);
     }
 

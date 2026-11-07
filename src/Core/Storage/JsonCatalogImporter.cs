@@ -1,5 +1,3 @@
-// 8 лаб
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,7 +5,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Abstractions;
-using Core.Domain; // Простір імен моделей
+using Core.Domain; // Обов'язково для класу Product
+using Core.Dto;    // Обов'язково для класу ProductDto
 
 namespace Core.Storage
 {

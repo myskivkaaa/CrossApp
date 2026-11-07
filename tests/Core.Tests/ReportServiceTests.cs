@@ -1,6 +1,8 @@
-//8 лаб
 using Xunit;
+using System.Linq;
 using Core.Services;
+using Core.Reports;
+using Core;
 
 public class ReportServiceTests
 {

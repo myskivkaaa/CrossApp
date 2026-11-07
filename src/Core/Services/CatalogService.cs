@@ -1,6 +1,8 @@
 using Core.Abstractions;
 using Core.Domain;
 using Core.Events; //  підключаємо простір імен для подій
+using System.Threading; // 8
+using System.Threading.Tasks; // 8
 
 namespace Core.Services;
 
@@ -81,4 +83,30 @@ public int ImportProducts(IEnumerable<(string sku, string name, string unit, int
     }
     return importedCount;
 }
+
+// 8 лаб : Асинхронний імпорт каталогу з підтримкою скасування (CancellationToken)
+    public async Task<int> ImportAsync(ICatalogImporter importer, string path, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(importer);
+        
+        // Завантажуємо елементи асинхронно через переданий імпортер
+        var items = await importer.LoadAsync(path, ct);
+        var added = 0;
+        
+        foreach (var item in items)
+        {
+            // Кооперативна перевірка скасування на кожній ітерації циклу
+            ct.ThrowIfCancellationRequested();
+            
+            // Ідемпотентність імпорту: якщо товар з таким ID вже є, пропускаємо його
+            if (_store.GetById(item.Id) is not null) 
+                continue; 
+            
+            _store.Add(item);
+            OnChanged(item, CatalogChangeKind.Added, item.Quantity);
+            added++;
+        }
+        
+        return added;
+    }
 }
