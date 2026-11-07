@@ -1,14 +1,20 @@
-﻿using Core;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using Core;
 using Core.Abstractions;
 using Core.Domain;
-using Core.Events; // НОВЕ: підключаємо простір імен для подій
+using Core.Events;
 using Core.Services;
 using Core.Storage;
+using Core.Reports;
 
 // Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Визначаємо режим роботи за допомогою аргументу командного рядка --file та --cache
+// Визначаємо режим роботи за допомогою аргументів командного рядка --file та --cache
 bool useFile = args.Contains("--file");
 bool useCache = args.Contains("--cache");
 string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
@@ -21,139 +27,123 @@ ICatalogStore store = useFile
 // Впроваджуємо сховище в бізнес-сервіс через конструктор (Dependency Injection)
 var service = new CatalogService(store);
 
-Console.WriteLine("==================================================");
-Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
-Console.WriteLine("==================================================\n");
+// Отримуємо поточний знімок елементів зі сховища для передачі у чисті функції звітів
+var items = service.All();
 
-// ==========================================================
-// ЛАБОРАТОРНА РОБОТА №6: Доменні події, делегати Action/Func, лямбди
-// ==========================================================
-Console.WriteLine("==================================================");
-Console.WriteLine("ЛАБОРАТОРНА РОБОТА №6: Доменні події та підписки");
-Console.WriteLine("==================================================");
+// Визначаємо підкоманду звітів із аргументів командного рядка (за замовчуванням — catalog)
+var command = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "catalog";
 
-// Налаштування лог-файлу для першого підписника
-var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "app.log");
-Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-
-// 1. Перший підписник (локальний метод) — виводить у консоль та дописує у файл
-void OnCatalogChanged(object? sender, CatalogChangedEventArgs e)
+switch (command)
 {
-    var line = $"{e.At:HH:mm:ss} {e.Kind,-8} {e.Id} {e.Delta,4:+0;-0} залишок {e.QuantityAfter}";
-    Console.WriteLine(line);
-    File.AppendAllText(logPath, line + Environment.NewLine);
+    case "report-top":
+        Console.WriteLine("==================================================");
+        Console.WriteLine("ЗВІТ: ТОП-5 позицій за кількістю");
+        Console.WriteLine("==================================================");
+        PrintStockLines(ReportService.TopByQuantity(items, 5));
+        break;
+
+    case "report-low":
+        Console.WriteLine("==================================================");
+        Console.WriteLine("ЗВІТ: Дефіцитні товари (залишок < 10)");
+        Console.WriteLine("==================================================");
+        PrintStockLines(ReportService.LowStock(items, 10));
+        break;
+
+    case "report-groups":
+        Console.WriteLine("==================================================");
+        Console.WriteLine("ЗВІТ: Групування за одиницями виміру");
+        Console.WriteLine("==================================================");
+        foreach (var g in ReportService.ByUnit(items))
+        {
+            Console.WriteLine($"{g.Key,-6} позицій: {g.Count,3} сумарно: {g.TotalQuantity,6}");
+        }
+        break;
+
+    case "report-sum":
+        Console.WriteLine("==================================================");
+        Console.WriteLine("ЗВІТ: Підсумкові агрегати");
+        Console.WriteLine("==================================================");
+        var t = ReportService.Totals(items);
+        Console.WriteLine($"позицій {t.Items}, всього {t.Total}, середнє {t.Average:F2}, макс {t.Max}");
+        break;
+
+    case "demo-deferred":
+        RunDeferredExecutionDemo();
+        break;
+
+    case "demo-perf":
+        RunPerformanceTest();
+        break;
+
+    case "catalog":
+    default:
+        Console.WriteLine("==================================================");
+        Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
+        Console.WriteLine("==================================================");
+        Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
+        Console.WriteLine("==================================================");
+        foreach (var p in service.All())
+        {
+            Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
+        }
+        Console.WriteLine("==================================================");
+        Console.WriteLine("Доступні підкоманди: report-top | report-low | report-groups | report-sum | demo-deferred | demo-perf | catalog");
+        break;
 }
 
-service.Changed += OnCatalogChanged;
-
-// 2. Другий підписник (лямбда-вираз із замиканням над лічильником)
-int changes = 0;
-service.Changed += (_, _) => changes++;
-
-// Основний хід роботи (Крок 1-5 методички): додавання та зміна стану з подіями
-var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 50);
-service.Receive(created.Id, 25);
-
-Console.WriteLine($"\n[Події] Отримано подій (лічильник лямбди): {changes}");
-
-// Перевірка відписки від першого обробника (Крок 5)
-service.Changed -= OnCatalogChanged;
-Console.WriteLine("[Події] Відписали консоль/файл від події. Робимо Receive(5)...");
-
-service.Receive(created.Id, 5); // Ця операція оновтить стан, але запису в консоль/файл уже не буде
-Console.WriteLine($"[Події] Отримано подій після відписки (лічильник лямбди): {changes}");
-
-// Сценарій відмови (Крок 6): перевіряємо, що при винятку подія не створюється
-Console.WriteLine("\n[Події] Сценарій відмови (виняток під час Receive):");
-try
-{
-    service.Receive("invalid-id-999", 10);
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Зловлено очікуваний виняток: {ex.Message}");
-    Console.WriteLine($"Лічильник подій залишився незмінним: {changes}");
-}
-
-// Використання Func через FindAll (Крок 7)
-Console.WriteLine("\n[Події] Демонстрація методу FindAll з делегатом Func:");
-var lowStock = service.FindAll(p => p.Quantity < 100);
-Console.WriteLine($"Знайдено товарів з кількістю < 100: {lowStock.Count}");
-Console.WriteLine("==================================================\n");
-
 // ==========================================================
-// ДОДАТКОВІ ЗАВДАННЯ (ЛАБОРАТОРНА РОБОТА №6)
+// ДОПОМІЖНІ МЕТОДИ ДЛЯ ВИВЕДЕННЯ ТА ДЕМОНСТРАЦІЇ
 // ==========================================================
-Console.WriteLine("==================================================");
-Console.WriteLine("ДОДАТКОВІ ЗАВДАННЯ (Лабораторна №6):");
-Console.WriteLine("==================================================");
 
-// Додаткове завдання 1: INotificationSink (ConsoleSink та FileSink через конструктор сервісу)
-Console.WriteLine("--- Додаткове 1: Патерн Sink замість подій ---");
-var extraLogPath = Path.Combine(AppContext.BaseDirectory, "logs", "sink.log");
-Core.Notifications.INotificationSink sink = args.Contains("--file-sink") 
-    ? new Core.Notifications.FileSink(extraLogPath) 
-    : new Core.Notifications.ConsoleSink();
-
-sink.Notify("[Sink] Це сповіщення надіслано через реалізацію INotificationSink.");
-
-// Додаткове завдання 2: Action<string> як параметр методу імпорту
-Console.WriteLine("\n--- Додаткове 2: Імпорт товарів з Action<string> (звіт про пропущені) ---");
-var rawData = new[]
+static void PrintStockLines(IReadOnlyList<StockLine> lines)
 {
-    ("SKU-X1", "Комутатор 8-портовий", "шт", 10),
-    ("", "Брак без SKU", "шт", 5),               // Має викликати виняток інваріанту
-    ("SKU-X3", "Патч-корд 2м", "шт", -2),          // Від'ємний залишок — виняток
-    ("SKU-X4", "Коннектори RJ-45", "пачка", 100)
-};
-
-int imported = service.ImportProducts(rawData, skippedMessage =>
-{
-    Console.WriteLine($"[Імпорт звіту]: {skippedMessage}");
-});
-
-Console.WriteLine($"Успішно імпортовано товарів: {imported}");
-Console.WriteLine("==================================================");
-
-// ==========================================================
-// ВИВЕДЕННЯ ПАТОЧНОГО СПИСКУ ТОВАРІВ У СХОВИЩІ
-// ==========================================================
-Console.WriteLine("==================================================");
-Console.WriteLine("ПОТОЧНИЙ СПИСОК ТОВАРІВ У СХОВИЩІ:");
-Console.WriteLine("==================================================");
-foreach (var p in service.All())
-{
-    Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
-}
-Console.WriteLine("==================================================\n");
-
-// ==========================================================
-// ДЕМОНСТРАЦІЯ ЗБЕРЕЖЕНИХ МЕТОДІВ (Щоб уникнути попереджень CS8321)
-// ==========================================================
-Console.WriteLine("ПЕРЕВІРКА ДОПОМІЖНИХ МЕТОДІВ З ПОПЕРЕДНІХ ЛАБ:");
-TryDo("Демонстрація TryDo", () => { throw new InvalidOperationException("Тестовий виняток"); });
-var testFactoryStore = StoreFactoryCreateDemo(args);
-Console.WriteLine($"Фабрика успішно перевірена, тип сховища: {testFactoryStore.GetType().Name}");
-Console.WriteLine("==================================================");
-
-// Допоміжний метод для безпечного виконання операцій і перехоплення винятків
-static void TryDo(string title, Action action)
-{
-    try
+    foreach (var l in lines)
     {
-        action();
-        Console.WriteLine($"{title}: виняток не спрацював!");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"{title} -> {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine($"{l.Sku,-10} {l.Name,-22} {l.Quantity,6} {l.Unit}");
     }
 }
 
-// Імітація методів для демонстрації додаткових завдань
-static ICatalogStore StoreFactoryCreateDemo(string[] arguments)
+// Демонстрація відкладеного виконання (Крок 3 методички)
+static void RunDeferredExecutionDemo()
 {
-    bool fileMode = arguments.Contains("--file");
-    string path = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
-    return fileMode ? new FileCatalogStore(path) : new InMemoryCatalogStore(SampleData.Products());
+    Console.WriteLine("--- Демонстрація відкладеного виконання (Deferred Execution) ---");
+    var sourceList = SampleData.Products().ToList();
+    
+    var query = sourceList.Where(p => p.Quantity < 10); // Запит побудовано, але ще не виконано
+    
+    Console.WriteLine($"Дефіцитних до змін: {query.Count()}");
+    
+    sourceList.Add(Product.Create("TMP-001", "SKU-999", "Тестова позиція (дефіцит)", "шт", 3));
+    
+    Console.WriteLine($"Дефіцитних після змін: {query.Count()}"); // Число змінилося через відкладене виконання
+    
+    var snapshot = query.ToList(); // Матеріалізація запиту
+    sourceList.Clear();
+    
+    Console.WriteLine($"У знімку лишилось (після очищення джерела): {snapshot.Count}"); // Результат зафіксовано
+}
+
+// Додатковий метод вимірювання часу (Додаткове завдання №4)
+static void RunPerformanceTest()
+{
+    Console.WriteLine("--- Вимірювання продуктивності (Stopwatch на 100 000 записів) ---");
+    var bigList = Enumerable.Range(1, 100_000)
+        .Select(i => Product.Create($"P-{i}", $"SKU-{i}", $"Товар {i}", i % 2 == 0 ? "шт" : "м", i % 50))
+        .ToList();
+
+    var sw = Stopwatch.StartNew();
+    
+    // Варіант А: Без проміжного ToList() (чисте відкладене виконання)
+    sw.Restart();
+    var queryWithoutList = bigList.Where(p => p.Quantity < 20).OrderBy(p => p.Quantity);
+    var count1 = queryWithoutList.Count();
+    sw.Stop();
+    Console.WriteLine($"Без проміжного ToList: {sw.ElapsedMilliseconds} мс (знайдено: {count1})");
+
+    // Варіант Б: З проміжним ToList() усередині ланцюжка (буферизація)
+    sw.Restart();
+    var queryWithList = bigList.Where(p => p.Quantity < 20).ToList().OrderBy(p => p.Quantity);
+    var count2 = queryWithList.Count();
+    sw.Stop();
+    Console.WriteLine($"З проміжним ToList:    {sw.ElapsedMilliseconds} мс (знайдено: {count2})");
 }

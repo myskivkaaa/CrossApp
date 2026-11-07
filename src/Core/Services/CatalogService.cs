@@ -9,10 +9,10 @@ public sealed class CatalogService(ICatalogStore store) // DI передаємо
     // Зберігаю посилання на інтерфейс сховища через ін'єкцію в конструкторі
     private readonly ICatalogStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
-    // НОВЕ: Подія для сповіщення зовнішнього коду про зміни стану
+    // 6 лаб : Подія для сповіщення зовнішнього коду про зміни стану
     public event EventHandler<CatalogChangedEventArgs>? Changed;
 
-    // НОВЕ: Приватний метод підняття події
+    // 6 лаб : Приватний метод підняття події
     private void OnChanged(Product p, CatalogChangeKind kind, int delta) =>
         Changed?.Invoke(this, new CatalogChangedEventArgs(p.Id, kind, delta, p.Quantity));
 
@@ -22,7 +22,7 @@ public sealed class CatalogService(ICatalogStore store) // DI передаємо
         var product = Product.Create(Guid.NewGuid().ToString("N")[..8], sku, name, unit, quantity);
         _store.Add(product);
         
-        // НОВЕ: Піднімаємо подію після успішного додавання
+        // 6 лаб : Піднімаємо подію після успішного додавання
         OnChanged(product, CatalogChangeKind.Added, quantity); 
         
         return product;
