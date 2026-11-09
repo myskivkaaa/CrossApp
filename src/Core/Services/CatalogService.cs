@@ -59,52 +59,59 @@ public sealed class CatalogService(ICatalogStore store) // DI передаємо
     }
 
     // ДОДАТКОВЕ ЗАВДАННЯ 2: Метод імпорту з Action<string> для звітів про пропущені рядки
-public int ImportProducts(IEnumerable<(string sku, string name, string unit, int quantity)> items, Action<string> reportSkipped)
-{
-    ArgumentNullException.ThrowIfNull(items);
-    ArgumentNullException.ThrowIfNull(reportSkipped);
-
-    int importedCount = 0;
-    foreach (var item in items)
+    public int ImportProducts(IEnumerable<(string sku, string name, string unit, int quantity)> items, Action<string> reportSkipped)
     {
-        try
-        {
-            // Пробуємо створити товар (інваріанти сутності можуть кинути виняток)
-            var product = Product.Create(Guid.NewGuid().ToString("N")[..8], item.sku, item.name, item.unit, item.quantity);
-            _store.Add(product);
-            OnChanged(product, CatalogChangeKind.Added, item.quantity);
-            importedCount++;
-        }
-        catch (Exception ex)
-        {
-            // Передаємо інформацію про пропущений рядок через делегат Action<string>
-            reportSkipped($"Пропущено рядок [SKU: {item.sku}, Назва: {item.name}]: {ex.Message}");
-        }
-    }
-    return importedCount;
-}
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(reportSkipped);
 
-// 8 лаб : Асинхронний імпорт каталогу з підтримкою скасування (CancellationToken)
-    public async Task<int> ImportAsync(ICatalogImporter importer, string path, CancellationToken ct = default)
+        int importedCount = 0;
+        foreach (var item in items)
+        {
+            try
+            {
+                // Пробуємо створити товар (інваріанти сутності можуть кинути виняток)
+                var product = Product.Create(Guid.NewGuid().ToString("N")[..8], item.sku, item.name, item.unit, item.quantity);
+                _store.Add(product);
+                OnChanged(product, CatalogChangeKind.Added, item.quantity);
+                importedCount++;
+            }
+            catch (Exception ex)
+            {
+                // Передаємо інформацію про пропущений рядок через делегат Action<string>
+                reportSkipped($"Пропущено рядок [SKU: {item.sku}, Назва: {item.name}]: {ex.Message}");
+            }
+        }
+        return importedCount;
+    }
+
+    // 8 лаб (з додатковими завданнями 1 та 3): Потоковий асинхронний імпорт із прогресом
+        public async Task<int> ImportAsync(ICatalogImporter importer, string path, CancellationToken ct = default, IProgress<int>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(importer);
         
-        // Завантажуємо елементи асинхронно через переданий імпортер
-        var items = await importer.LoadAsync(path, ct);
-        var added = 0;
-        
-        foreach (var item in items)
+        var itemsList = new List<Product>();
+        await foreach (var item in importer.LoadStreamAsync(path, ct))
         {
-            // Кооперативна перевірка скасування на кожній ітерації циклу
+            itemsList.Add(item);
+        }
+
+        var added = 0;
+        for (int i = 0; i < itemsList.Count; i++)
+        {
             ct.ThrowIfCancellationRequested();
-            
-            // Ідемпотентність імпорту: якщо товар з таким ID вже є, пропускаємо його
+            var item = itemsList[i];
+
             if (_store.GetById(item.Id) is not null) 
+            {
+                progress?.Report((i + 1) * 100 / itemsList.Count);
                 continue; 
+            }
             
             _store.Add(item);
             OnChanged(item, CatalogChangeKind.Added, item.Quantity);
             added++;
+            
+            progress?.Report((i + 1) * 100 / itemsList.Count);
         }
         
         return added;

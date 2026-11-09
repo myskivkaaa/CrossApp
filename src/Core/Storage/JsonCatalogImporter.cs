@@ -1,40 +1,43 @@
+// лаб 8+дод
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
-using System.Threading.Tasks;
 using Core.Abstractions;
-using Core.Domain; // Обов'язково для класу Product
-using Core.Dto;    // Обов'язково для класу ProductDto
+using Core.Domain;
+using Core.Dto;
 
 namespace Core.Storage
 {
     public sealed class JsonCatalogImporter : ICatalogImporter
     {
-        public async Task<IReadOnlyList<Product>> LoadAsync(string path, CancellationToken ct = default)
+        public async IAsyncEnumerable<Product> LoadStreamAsync(
+            string path, 
+            [EnumeratorCancellation] CancellationToken ct = default)
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 4096, useAsync: true);
-                
+
             var dtos = await JsonSerializer.DeserializeAsync<List<ProductDto>>(
                 stream, cancellationToken: ct)
                 ?? throw new DomainException($"Файл {Path.GetFileName(path)} не містить списку.");
 
-            var result = new List<Product>(dtos.Count);
             for (var i = 0; i < dtos.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
+                Product product;
                 try 
                 { 
-                    result.Add(Product.FromDto(dtos[i])); 
+                    product = Product.FromDto(dtos[i]); 
                 }
                 catch (ArgumentException ex)
                 { 
                     throw new DomainException($"Запис {i + 1}: {ex.Message}", ex); 
                 }
+                yield return product;
             }
-            return result;
         }
     }
 }

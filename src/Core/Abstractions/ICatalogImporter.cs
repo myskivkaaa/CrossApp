@@ -1,13 +1,14 @@
-// 8 лаб
+// 8 лаб + додаткове 1
+
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Tasks;
-using Core.Domain; // Замініть на ваш простір імен для моделей (наприклад, Product)
+using Core.Domain;
 
 namespace Core.Abstractions
 {
     public interface ICatalogImporter
     {
-        Task<IReadOnlyList<Product>> LoadAsync(string path, CancellationToken ct = default);
+        IAsyncEnumerable<Product> LoadStreamAsync(string path, CancellationToken ct = default);
     }
 }

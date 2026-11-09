@@ -16,10 +16,13 @@ using Core.Reports;
 // Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// НОВЕ (Лаба 8): Налаштування кооперативного скасування через Ctrl+C
+// Налаштування кооперативного скасування через Ctrl+C та таймаут (Додаткове завдання №2)
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-// cts.CancelAfter(TimeSpan.FromSeconds(2)); // опційно для демонстрації таймауту
+
+// Створюємо додатковий таймаут (наприклад, 10 секунд) та зв'язуємо його з користувацьким токеном
+using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, timeoutCts.Token);
 
 // Визначаємо режим роботи за допомогою аргументів командного рядка --file та --cache
 bool useFile = args.Contains("--file");
@@ -88,23 +91,34 @@ switch (command)
         Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
         Console.WriteLine("==================================================");
         
-        // НОВЕ (Лаба 8): Приклад виклику асинхронного імпорту з обробкою винятків і скасування
+        // Виклик асинхронного імпорту з підтримкою прогресу (Додаткове завдання №3) та зв'язаних токенів
         try
         {
-            var added = await service.ImportAsync(new JsonCatalogImporter(), dataPath, cts.Token);
+            // Створюємо звіт про прогрес, який динамічно виводить відсотки в одному рядку консолі
+            var progress = new Progress<int>(percent =>
+            {
+                Console.Write($"\rПрогрес імпорту: {percent}%   ");
+            });
+
+            var added = await service.ImportAsync(new JsonCatalogImporter(), dataPath, linkedCts.Token, progress);
+            Console.WriteLine(); // Перенесення рядка після завершення прогресу
             Console.WriteLine($"Імпортовано записів: {added}");
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            Console.WriteLine("\nІмпорт перервано за тайм-аутом.");
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine("Імпорт скасовано.");
+            Console.WriteLine("\nІмпорт скасовано користувачем.");
         }
         catch (DomainException ex)
         {
-            Console.WriteLine($"Дані відхилено: {ex.Message}");
+            Console.WriteLine($"\nДані відхилено: {ex.Message}");
         }
         catch (FileNotFoundException)
         {
-            Console.WriteLine($"Файл не знайдено: {dataPath}");
+            Console.WriteLine($"\nФайл не знайдено: {dataPath}");
         }
 
         Console.WriteLine("==================================================");
