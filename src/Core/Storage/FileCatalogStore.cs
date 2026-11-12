@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Core.Abstractions;
 using Core.Domain;
@@ -7,7 +8,13 @@ namespace Core.Storage;
 
 public sealed class FileCatalogStore(string path) : ICatalogStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true }; // Форматування JSON з відступами
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly Dictionary<string, Product> _cache = new(StringComparer.OrdinalIgnoreCase); // Кеш у пам'яті для швидкого доступу
     private readonly string _path = Path.GetFullPath(path); // Абсолютний шлях до файлу даних
     private bool _loaded; // Прапорець, щоб завантажувати файл лише один раз при першому зверненні
@@ -20,7 +27,7 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
         {
             // Зчитую JSON-файл і десеріалізую його у список DTO-об'єктів
             var json = File.ReadAllText(_path);
-            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(json) ?? [];
+            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(json, Options) ?? [];
             
             // Відновлюю повноцінні доменні сутності через FromDto з перевіркою інваріантів
             foreach (var dto in dtos)
@@ -37,11 +44,14 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
         // Гарантую, що каталог для файлу існує, перш ніж записувати дані
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         
-        // Перетворюю сутності в DTO для коректної серіалізації без загрози приватним сетерам
+        // Перетворюю сутності в DTO для коректної серіалізації
         var dtos = _cache.Values.Select(p => p.ToDto()).ToList();
         var json = JsonSerializer.Serialize(dtos, Options);
         
-        File.WriteAllText(_path, json); // Записую актуальний стан на диск
+        // Атомарний запис: спочатку записуємо у тимчасовий файл, потім міняємо місцями
+        var tmp = _path + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, _path, overwrite: true);
     }
 
     public IReadOnlyList<Product> List()
@@ -89,8 +99,8 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
 
     public IReadOnlyList<Product> FindBy(Func<Product, bool> predicate)
     {
-    ArgumentNullException.ThrowIfNull(predicate);
-    EnsureLoaded();
-    return _cache.Values.Where(predicate).ToList();
+        ArgumentNullException.ThrowIfNull(predicate);
+        EnsureLoaded();
+        return _cache.Values.Where(predicate).ToList();
     }
 }

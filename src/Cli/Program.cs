@@ -3,48 +3,113 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Core;
 using Core.Abstractions;
+using Core.Configuration;
 using Core.Domain;
 using Core.Events;
 using Core.Services;
 using Core.Storage;
 using Core.Reports;
+using Microsoft.Extensions.Configuration;
 
 // Встановлюємо кодування консолі для коректного відображення українських символів
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Налаштування кооперативного скасування через Ctrl+C та таймаут (Додаткове завдання №2)
+// --- ЛАНЦЮЖОК КОНФІГУРАЦІЇ (Лабораторна робота № 9) ---
+
+var envName = Environment.GetEnvironmentVariable("CROSSAPP_ENVIRONMENT") ?? "Development";
+
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile($"appsettings.{envName}.json", optional: true)
+    .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+    .AddEnvironmentVariables(prefix: "CROSSAPP_")
+    .AddCommandLine(args)
+    .Build();
+
+var options = configuration.Get<AppOptions>() ?? new AppOptions();
+
+// ДОДАТКОВЕ ЗАВДАННЯ №1: Валідація налаштувань на старті
+if (string.IsNullOrWhiteSpace(options.Storage.DataPath))
+{
+    Console.WriteLine("Помилка конфігурації: Шлях DataPath не може бути порожнім.");
+    Environment.Exit(2);
+}
+
+if (!options.Storage.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine("Помилка конфігурації: Назва файлу (FileName) має закінчуватися на .json.");
+    Environment.Exit(2);
+}
+
+// ДОДАТКОВЕ ЗАВДАННЯ №2: Підтримка ключа --data-path через командний рядок (перекриває і файл, і env)
+var commandLineDataPath = configuration["data-path"] ?? configuration["Storage:DataPath"];
+var legacyDataPath = Environment.GetEnvironmentVariable("CROSSAPP_DATA_PATH");
+
+var finalDataPath = !string.IsNullOrWhiteSpace(commandLineDataPath) && commandLineDataPath != options.Storage.DataPath 
+    ? commandLineDataPath 
+    : (string.IsNullOrWhiteSpace(legacyDataPath) ? options.Storage.DataPath : legacyDataPath);
+
+var storageOptions = new StorageOptions
+{
+    DataPath = finalDataPath,
+    FileName = options.Storage.FileName
+};
+
+var dataPath = storageOptions.ResolveFullPath(AppContext.BaseDirectory);
+
+// Зчитування секрету
+var apiKey = configuration["Integration:ApiKey"];
+Console.WriteLine($"Файл даних: {dataPath}");
+Console.WriteLine(apiKey is null ? "ApiKey: не заданий" : $"ApiKey: присутній, довжина {apiKey.Length}");
+Console.WriteLine("==================================================");
+
+// Налаштування кооперативного скасування через Ctrl+C та таймаут
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-// Створюємо додатковий таймаут (наприклад, 10 секунд) та зв'язуємо його з користувацьким токеном
 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, timeoutCts.Token);
 
 // Визначаємо режим роботи за допомогою аргументів командного рядка --file та --cache
-bool useFile = args.Contains("--file");
+bool useFile = args.Contains("--file") || args.Contains("export");
 bool useCache = args.Contains("--cache");
-string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
 
-// Composition Root: єдине місце в додатку, де обирається конкретна реалізація сховища
+// Composition Root: ініціалізація сховища з урахуванням конфігурації
 ICatalogStore store = useFile
     ? (useCache ? new CachingCatalogStore(new FileCatalogStore(dataPath)) : new FileCatalogStore(dataPath))
     : new InMemoryCatalogStore(SampleData.Products());
 
-// Впроваджуємо сховище в бізнес-сервіс через конструктор (Dependency Injection)
 var service = new CatalogService(store);
-
-// Отримуємо поточний знімок елементів зі сховища для передачі у чисті функції звітів
 var items = service.All();
 
-// Визначаємо підкоманду звітів із аргументів командного рядка (за замовчуванням — catalog)
 var command = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "catalog";
 
 switch (command)
 {
+    case "export":
+        var format = storageOptions.Format.ToLowerInvariant();
+        if (format == "csv")
+        {
+            // Експорт у CSV формат
+            var csvPath = Path.ChangeExtension(dataPath, ".csv");
+            var csvLines = new List<string> { "Id,Sku,Name,Unit,Quantity" };
+            csvLines.AddRange(service.All().Select(p => $"{p.Id},{p.Sku},{p.Name},{p.Unit},{p.Quantity}"));
+            File.WriteAllLines(csvPath, csvLines);
+            Console.WriteLine($"Експортовано записів (CSV) до {csvPath}: {service.All().Count}");
+        }
+        else
+        {
+            // Стандартний JSON експорт (використовує файл сховища)
+            Console.WriteLine($"Експортовано записів (JSON): {service.All().Count}");
+        }
+        break;
+
     case "report-top":
         Console.WriteLine("==================================================");
         Console.WriteLine("ЗВІТ: ТОП-5 позицій за кількістю");
@@ -91,17 +156,15 @@ switch (command)
         Console.WriteLine($"ПРОЄКТ КАТАЛОГУ (Сховище: {store.GetType().Name})");
         Console.WriteLine("==================================================");
         
-        // Виклик асинхронного імпорту з підтримкою прогресу (Додаткове завдання №3) та зв'язаних токенів
         try
         {
-            // Створюємо звіт про прогрес, який динамічно виводить відсотки в одному рядку консолі
             var progress = new Progress<int>(percent =>
             {
                 Console.Write($"\rПрогрес імпорту: {percent}%   ");
             });
 
             var added = await service.ImportAsync(new JsonCatalogImporter(), dataPath, linkedCts.Token, progress);
-            Console.WriteLine(); // Перенесення рядка після завершення прогресу
+            Console.WriteLine();
             Console.WriteLine($"Імпортовано записів: {added}");
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
@@ -129,13 +192,9 @@ switch (command)
             Console.WriteLine($"{p.Id}  [{p.Sku,-8}]  {p.Name,-20}  -  {p.Quantity,3} {p.Unit}");
         }
         Console.WriteLine("==================================================");
-        Console.WriteLine("Доступні підкоманди: report-top | report-low | report-groups | report-sum | demo-deferred | demo-perf | catalog");
+        Console.WriteLine("Доступні підкоманди: export | report-top | report-low | report-groups | report-sum | demo-deferred | demo-perf | catalog");
         break;
 }
-
-// ==========================================================
-// ДОПОМІЖНІ МЕТОДИ ДЛЯ ВИВЕДЕННЯ ТА ДЕМОНСТРАЦІЇ
-// ==========================================================
 
 static void PrintStockLines(IReadOnlyList<StockLine> lines)
 {
@@ -145,27 +204,19 @@ static void PrintStockLines(IReadOnlyList<StockLine> lines)
     }
 }
 
-// Демонстрація відкладеного виконання (Крок 3 методички)
 static void RunDeferredExecutionDemo()
 {
     Console.WriteLine("--- Демонстрація відкладеного виконання (Deferred Execution) ---");
     var sourceList = SampleData.Products().ToList();
-    
-    var query = sourceList.Where(p => p.Quantity < 10); // Запит побудовано, але ще не виконано
-    
+    var query = sourceList.Where(p => p.Quantity < 10);
     Console.WriteLine($"Дефіцитних до змін: {query.Count()}");
-    
     sourceList.Add(Product.Create("TMP-001", "SKU-999", "Тестова позиція (дефіцит)", "шт", 3));
-    
-    Console.WriteLine($"Дефіцитних після змін: {query.Count()}"); // Число змінилося через відкладене виконання
-    
-    var snapshot = query.ToList(); // Матеріалізація запиту
+    Console.WriteLine($"Дефіцитних після змін: {query.Count()}");
+    var snapshot = query.ToList();
     sourceList.Clear();
-    
-    Console.WriteLine($"У знімку лишилось (після очищення джерела): {snapshot.Count}"); // Результат зафіксовано
+    Console.WriteLine($"У знімку лишилось (після очищення джерела): {snapshot.Count}");
 }
 
-// Додатковий метод вимірювання часу (Додаткове завдання №4)
 static void RunPerformanceTest()
 {
     Console.WriteLine("--- Вимірювання продуктивності (Stopwatch на 100 000 записів) ---");
@@ -174,15 +225,12 @@ static void RunPerformanceTest()
         .ToList();
 
     var sw = Stopwatch.StartNew();
-    
-    // Варіант А: Без проміжного ToList() (чисте відкладене виконання)
     sw.Restart();
     var queryWithoutList = bigList.Where(p => p.Quantity < 20).OrderBy(p => p.Quantity);
     var count1 = queryWithoutList.Count();
     sw.Stop();
     Console.WriteLine($"Без проміжного ToList: {sw.ElapsedMilliseconds} мс (знайдено: {count1})");
 
-    // Варіант Б: З проміжним ToList() усередині ланцюжка (буферизація)
     sw.Restart();
     var queryWithList = bigList.Where(p => p.Quantity < 20).ToList().OrderBy(p => p.Quantity);
     var count2 = queryWithList.Count();
