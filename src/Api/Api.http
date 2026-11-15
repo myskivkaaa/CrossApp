@@ -1,0 +1,16 @@
+@Api_HostAddress = http://localhost:5080
+
+### Отримати список продуктів
+GET {{Api_HostAddress}}/api/products
+Accept: application/json
+
+### Створити новий продукт
+POST {{Api_HostAddress}}/api/products
+Content-Type: application/json
+
+{
+  "sku": "A-100",
+  "name": "Цемент M400",
+  "unit": "мішок",
+  "quantity": 40
+}

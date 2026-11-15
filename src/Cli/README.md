@@ -133,3 +133,17 @@ Composition Root: Точка входу в Program.cs, де за допомог�
    dotnet run --project src/Cli -- export
 
 
+# 10 Лабораторна робота: Minimal API, CRUD, валідація, OpenAPI (Scalar)
+
+## Опис проєкту
+Цей проєкт реалізує веб-шар (`src/Api`) на базі **ASP.NET Core Minimal API** для доменного каталогу (`src/Core`), що використовувався в попередніх лабораторних роботах. Інтерфейс документований за допомогою **OpenAPI** та інтерактивного середовища **Scalar UI**.
+
+## Порт та запуск
+Застосунок зафіксовано на порту **5080**.
+
+Команда для запуску API:
+dotnet run --project src/Api --urls http://localhost:5080
+
+
+Доступ до інтерактивної документації Scalar UI у браузері:
+http://localhost:5080/scalar/v1
