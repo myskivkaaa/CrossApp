@@ -147,3 +147,13 @@ dotnet run --project src/Api --urls http://localhost:5080
 
 Доступ до інтерактивної документації Scalar UI у браузері:
 http://localhost:5080/scalar/v1
+
+## Лабораторна робота 11 (EF Core + SQLite)
+
+Рядок підключення задається у `src/Api/appsettings.json` через `ConnectionStrings:AppDb` (шлях будується від `ContentRootPath` до `data/app.db`)
+
+# Міграції
+```bash
+dotnet ef migrations add <НазваМіграції> --project src/Infrastructure --startup-project src/Api
+dotnet ef database update --project src/Infrastructure --startup-project src/Api
+   Як скинути БДВидалити файл src/Api/data/app.db (та *.db-shm, *.db-wal, якщо є) і виконати dotnet ef database update --project src/Infrastructure --startup-project src/Api
