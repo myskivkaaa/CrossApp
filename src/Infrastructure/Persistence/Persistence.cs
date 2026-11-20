@@ -10,6 +10,7 @@ public sealed class ProductRow
     public string Name { get; set; } = "";
     public string Unit { get; set; } = "";
     public int Quantity { get; set; }
+    public string? Location { get; set; }
 
     // Зв'язок 1:N з партіями (BatchRow)
     public List<BatchRow> Batches { get; set; } = [];
@@ -46,6 +47,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         // Унікальний індекс по артикулу Sku
         product.HasIndex(p => p.Sku).IsUnique();
+
+        product.Property(p => p.Location).HasMaxLength(100);
 
         // Зв'язок 1:N і каскадне видалення
         product.HasMany(p => p.Batches)
