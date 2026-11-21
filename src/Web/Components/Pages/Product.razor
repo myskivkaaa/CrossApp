@@ -1,14 +1,40 @@
 @page "/products"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Web.Contracts
 @using Web.Services
 @inject ProductsApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Товари на складі</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3>Товари на складі</h3>
     <a class="btn btn-primary" href="/products/new">Додати</a>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-5">
+        <input type="text"
+               class="form-control"
+               placeholder="Пошук за артикулом, назвою або од..."
+               @bind="search"
+               @bind:event="oninput"
+               @bind:after="LoadItemsAsync" />
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" @bind="sortBy" @bind:after="LoadItemsAsync">
+            <option value="name">Сортувати: Назва</option>
+            <option value="sku">Сортувати: Артикул</option>
+            <option value="quantity">Сортувати: Кількість</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="sortDesc" @bind:after="LoadItemsAsync">
+            <option value="false">За зростанням</option>
+            <option value="true">За спаданням</option>
+        </select>
+    </div>
 </div>
 
 @if (error is not null)
@@ -45,6 +71,12 @@ else
                     <td>@item.Unit</td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" href="@($"/products/{item.Id}")">Редагувати</a>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger ms-1"
+                                disabled="@(deletingId == item.Id)"
+                                @onclick="() => DeleteItemAsync(item)">
+                            @(deletingId == item.Id ? "Видалення..." : "Видалити")
+                        </button>
                     </td>
                 </tr>
             }
@@ -55,16 +87,70 @@ else
 @code {
     private List<ProductModel>? items;
     private string? error;
+    private string? deletingId;
 
-    protected override async Task OnInitializedAsync()
+    private string? search;
+    private string sortBy = "name";
+    private bool sortDesc;
+
+    private CancellationTokenSource? cts;
+
+    protected override async Task OnInitializedAsync() => await LoadItemsAsync();
+
+    private async Task LoadItemsAsync()
     {
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+
+        error = null;
         try
         {
-            items = await Api.ListAsync();
+            items = await Api.ListAsync(search, sortBy, sortDesc, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Попередній запит скасовано через новий пошук, сортування або перехід зі сторінки
         }
         catch (HttpRequestException)
         {
             error = "API недоступний (порт 5080). Перевірте, чи запущено src/Api.";
         }
+    }
+
+    private async Task DeleteItemAsync(ProductModel item)
+    {
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Видалити товар \"{item.Name}\" ({item.Sku})?");
+
+        if (!confirmed || items is null)
+        {
+            return;
+        }
+
+        error = null;
+        deletingId = item.Id;
+        try
+        {
+            var result = await Api.DeleteAsync(item.Id, cts?.Token ?? CancellationToken.None);
+            if (result.Ok)
+            {
+                items.RemoveAll(x => x.Id == item.Id);
+                return;
+            }
+
+            error = result.Message ?? "Не вдалося видалити запис.";
+        }
+        finally
+        {
+            deletingId = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
     }
 }

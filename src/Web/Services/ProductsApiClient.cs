@@ -6,8 +6,29 @@ namespace Web.Services;
 
 public sealed class ProductsApiClient(HttpClient http)
 {
-    public async Task<List<ProductModel>> ListAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<ProductModel>>("api/products", ct) ?? [];
+    public async Task<List<ProductModel>> ListAsync(
+        string? search = null,
+        string? sortBy = null,
+        bool desc = false,
+        CancellationToken ct = default)
+    {
+        var queryParams = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            queryParams.Add($"search={Uri.EscapeDataString(search.Trim())}");
+        }
+        if (!string.IsNullOrWhiteSpace(sortBy))
+        {
+            queryParams.Add($"sortBy={Uri.EscapeDataString(sortBy)}");
+            queryParams.Add($"desc={desc.ToString().ToLowerInvariant()}");
+        }
+
+        var url = queryParams.Count > 0
+            ? $"api/products?{string.Join("&", queryParams)}"
+            : "api/products";
+
+        return await http.GetFromJsonAsync<List<ProductModel>>(url, ct) ?? [];
+    }
 
     public async Task<ProductModel?> FindAsync(string id, CancellationToken ct = default)
     {
@@ -73,6 +94,29 @@ public sealed class ProductsApiClient(HttpClient http)
             if (response.StatusCode == HttpStatusCode.Conflict)
             {
                 return new ApiResult(false, "Конфлікт бізнес-правил під час збереження запису.");
+            }
+
+            return new ApiResult(false, $"Сервер повернув {(int)response.StatusCode}.");
+        }
+        catch (HttpRequestException)
+        {
+            return new ApiResult(false, "API недоступний. Перевірте, чи запущено src/Api.");
+        }
+    }
+
+    public async Task<ApiResult> DeleteAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.DeleteAsync($"api/products/{Uri.EscapeDataString(id)}", ct);
+            if (response.IsSuccessStatusCode)
+            {
+                return new ApiResult(true);
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return new ApiResult(false, "Запис не знайдено — можливо, його вже видалили.");
             }
 
             return new ApiResult(false, $"Сервер повернув {(int)response.StatusCode}.");

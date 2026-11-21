@@ -1,6 +1,7 @@
 @page "/products/new"
 @page "/products/{Id}"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Web.Contracts
 @using Web.Services
 @inject ProductsApiClient Api
@@ -90,6 +91,16 @@ else
     private bool loading;
     private bool submitting;
 
+    private CancellationTokenSource? cts;
+
+    private CancellationToken ResetToken()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+        return cts.Token;
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         serverErrors.Clear();
@@ -102,10 +113,11 @@ else
             return;
         }
 
+        var token = ResetToken();
         loading = true;
         try
         {
-            var existing = await Api.FindAsync(Id!);
+            var existing = await Api.FindAsync(Id!, token);
             if (existing is null)
             {
                 notFoundMessage = "Запис з таким ідентифікатором не знайдено.";
@@ -113,6 +125,10 @@ else
             }
 
             model = existing;
+        }
+        catch (OperationCanceledException)
+        {
+            // Запит скасовано при зміні параметра або виході зі сторінки
         }
         catch (HttpRequestException)
         {
@@ -133,11 +149,12 @@ else
         generalError = null;
         submitting = true;
 
+        var token = ResetToken();
         try
         {
             var result = IsEdit
-                ? await Api.UpdateAsync(model)
-                : await Api.CreateAsync(model);
+                ? await Api.UpdateAsync(model, token)
+                : await Api.CreateAsync(model, token);
 
             if (result.Ok)
             {
@@ -153,9 +170,19 @@ else
                     StringComparer.OrdinalIgnoreCase);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Запит скасовано при переході зі сторінки
+        }
         finally
         {
             submitting = false;
         }
+    }
+
+    public void Dispose()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
     }
 }
