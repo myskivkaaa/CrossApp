@@ -11,6 +11,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails(); // Формат помилок RFC 9457
 
+var webOrigin = builder.Configuration["Cors:WebOrigin"] ?? "http://localhost:5090";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("web", policy =>
+        policy.WithOrigins(webOrigin)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 // Читаємо рядок підключення та будуємо абсолютний шлях від каталогу застосунку
 var raw = builder.Configuration.GetConnectionString("AppDb") ?? "Data Source=data/app.db";
 var csb = new SqliteConnectionStringBuilder(raw);
@@ -29,6 +38,7 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseCors("web"); // обов'язково до app.MapProducts()
 
 // Застосовуємо міграції EF Core у середовищі Development
 using (var scope = app.Services.CreateScope())

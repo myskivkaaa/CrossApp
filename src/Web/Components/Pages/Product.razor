@@ -1,0 +1,70 @@
+@page "/products"
+@rendermode InteractiveServer
+@using Web.Contracts
+@using Web.Services
+@inject ProductsApiClient Api
+
+<PageTitle>Товари на складі</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Товари на складі</h3>
+    <a class="btn btn-primary" href="/products/new">Додати</a>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (items is null)
+{
+    <p><em>Завантаження...</em></p>
+}
+else if (items.Count == 0)
+{
+    <p>Записів ще немає.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Артикул</th>
+                <th>Назва</th>
+                <th>К-сть</th>
+                <th>Од.</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in items)
+            {
+                <tr class="@(item.Quantity <= 5 ? "table-warning" : "")">
+                    <td>@item.Sku</td>
+                    <td>@item.Name</td>
+                    <td>@item.Quantity</td>
+                    <td>@item.Unit</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary" href="@($"/products/{item.Id}")">Редагувати</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ProductModel>? items;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            items = await Api.ListAsync();
+        }
+        catch (HttpRequestException)
+        {
+            error = "API недоступний (порт 5080). Перевірте, чи запущено src/Api.";
+        }
+    }
+}

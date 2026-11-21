@@ -1,0 +1,161 @@
+@page "/products/new"
+@page "/products/{Id}"
+@rendermode InteractiveServer
+@using Web.Contracts
+@using Web.Services
+@inject ProductsApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(IsEdit ? "Редагування товару" : "Новий товар")</PageTitle>
+
+<h3>@(IsEdit ? "Редагування товару" : "Новий товар")</h3>
+
+@if (loading)
+{
+    <p><em>Завантаження...</em></p>
+}
+else if (notFoundMessage is not null)
+{
+    <div class="alert alert-warning">@notFoundMessage</div>
+    <a class="btn btn-secondary" href="/products">Назад до списку</a>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(generalError))
+    {
+        <div class="alert alert-danger">@generalError</div>
+    }
+
+    <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="productForm">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">Артикул (SKU)</label>
+            <InputText class="form-control" @bind-Value="model.Sku" />
+            <ValidationMessage For="@(() => model.Sku)" />
+            @foreach (var err in GetFieldErrors(nameof(model.Sku)))
+            {
+                <div class="text-danger small">@err</div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Назва</label>
+            <InputText class="form-control" @bind-Value="model.Name" />
+            <ValidationMessage For="@(() => model.Name)" />
+            @foreach (var err in GetFieldErrors(nameof(model.Name)))
+            {
+                <div class="text-danger small">@err</div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Одиниця виміру</label>
+            <InputText class="form-control" @bind-Value="model.Unit" />
+            <ValidationMessage For="@(() => model.Unit)" />
+            @foreach (var err in GetFieldErrors(nameof(model.Unit)))
+            {
+                <div class="text-danger small">@err</div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Кількість</label>
+            <InputNumber class="form-control" @bind-Value="model.Quantity" />
+            <ValidationMessage For="@(() => model.Quantity)" />
+            @foreach (var err in GetFieldErrors(nameof(model.Quantity)))
+            {
+                <div class="text-danger small">@err</div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@submitting">
+                @(submitting ? "Збереження..." : "Зберегти")
+            </button>
+            <a class="btn btn-outline-secondary" href="/products">Скасувати</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private bool IsEdit => !string.IsNullOrWhiteSpace(Id);
+
+    private ProductModel model = new();
+    private Dictionary<string, string[]> serverErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private string? notFoundMessage;
+    private bool loading;
+    private bool submitting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        serverErrors.Clear();
+        generalError = null;
+        notFoundMessage = null;
+
+        if (!IsEdit)
+        {
+            model = new ProductModel();
+            return;
+        }
+
+        loading = true;
+        try
+        {
+            var existing = await Api.FindAsync(Id!);
+            if (existing is null)
+            {
+                notFoundMessage = "Запис з таким ідентифікатором не знайдено.";
+                return;
+            }
+
+            model = existing;
+        }
+        catch (HttpRequestException)
+        {
+            generalError = "API недоступний (порт 5080). Перевірте, чи запущено src/Api.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private IEnumerable<string> GetFieldErrors(string fieldName) =>
+        serverErrors.TryGetValue(fieldName, out var messages) ? messages : [];
+
+    private async Task HandleSubmit()
+    {
+        serverErrors.Clear();
+        generalError = null;
+        submitting = true;
+
+        try
+        {
+            var result = IsEdit
+                ? await Api.UpdateAsync(model)
+                : await Api.CreateAsync(model);
+
+            if (result.Ok)
+            {
+                Nav.NavigateTo("/products");
+                return;
+            }
+
+            generalError = result.Message;
+            if (result.Errors is not null)
+            {
+                serverErrors = new Dictionary<string, string[]>(
+                    result.Errors,
+                    StringComparer.OrdinalIgnoreCase);
+            }
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+}
