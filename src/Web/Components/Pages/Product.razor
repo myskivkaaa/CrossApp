@@ -30,9 +30,9 @@
         </select>
     </div>
     <div class="col-md-3">
-        <select class="form-select" @bind="sortDesc" @bind:after="LoadItemsAsync">
-            <option value="false">За зростанням</option>
-            <option value="true">За спаданням</option>
+        <select class="form-select" @bind="sortDirection" @bind:after="LoadItemsAsync">
+            <option value="asc">За зростанням</option>
+            <option value="desc">За спаданням</option>
         </select>
     </div>
 </div>
@@ -91,7 +91,8 @@ else
 
     private string? search;
     private string sortBy = "name";
-    private bool sortDesc;
+    private string sortDirection = "asc";
+    private bool IsDesc => sortDirection == "desc";
 
     private CancellationTokenSource? cts;
 
@@ -106,7 +107,7 @@ else
         error = null;
         try
         {
-            items = await Api.ListAsync(search, sortBy, sortDesc, cts.Token);
+            items = await Api.ListAsync(search, sortBy, IsDesc, cts.Token);
         }
         catch (OperationCanceledException)
         {
