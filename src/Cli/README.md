@@ -157,3 +157,24 @@ http://localhost:5080/scalar/v1
 dotnet ef migrations add <НазваМіграції> --project src/Infrastructure --startup-project src/Api
 dotnet ef database update --project src/Infrastructure --startup-project src/Api
    Як скинути БДВидалити файл src/Api/data/app.db (та *.db-shm, *.db-wal, якщо є) і виконати dotnet ef database update --project src/Infrastructure --startup-project src/Api
+
+## Лабораторна робота 12 — Blazor-клієнт (`src/Web`)
+
+- **Режим і де виконується код:** обрано **Interactive Server** (`--interactivity Server --all-interactive`). C#-код компонентів і `ProductsApiClient` виконуються на сервері `Web`, а браузер отримує оновлення UI через SignalR[cite: 2]. Запити до API через `HttpClient` ідуть між серверами (`server-to-server`), тому CORS тут не спрацьовує, але політику **CORS** у `src/Api` налаштовано для можливих браузерних клієнтів (наприклад, Blazor WebAssembly або іншого origin).
+- **Архітектура:** `src/Web` не посилається на `src/Infrastructure`, не містить рядка підключення до БД та не дублює доменну бізнес-логіку.
+
+### Конфігурація
+- `src/Web/appsettings.json` -> `"Api": { "BaseUrl": "http://localhost:5080" }`
+- `src/Api/appsettings.json` -> `"Cors": { "WebOrigin": "http://localhost:5090" }`
+
+### Запуск (два термінали)
+1. API (порт `5080`): dotnet run --project src/Api --urls http://localhost:5080
+2. Web (порт 5090): dotnet run --project src/Web --urls http://localhost:5090
+
+### Маршрути та виклики API
+
+| Сторінка / маршрут | Дія / виклик API | Статуси відповіді |
+| --- | --- | --- |
+| `/products` | `GET /api/products` | `200 OK` (або помилка підключення при недоступному API) |
+| `/products/new` | `POST /api/products` | `201 Created`, `400 Bad Request` (помилки валідації) |
+| `/products/{Id}` | `GET /api/products/{id}`, `PUT /api/products/{id}` | `200 OK`, `400 Bad Request`, `404 Not Found` |
